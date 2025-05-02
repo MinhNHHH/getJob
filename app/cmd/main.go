@@ -9,21 +9,30 @@ import (
 
 	getJob "github.com/MinhNHHH/get-job/pkg/app"
 	"github.com/MinhNHHH/get-job/pkg/cfgs"
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/MinhNHHH/get-job/pkg/database/repository/dbrepo"
 )
 
 func main() {
 	app := getJob.Application{}
 	cfgs := cfgs.LoadConfigs()
-	db := getJob.NewDB(cfgs)
-	app.DB = db
+	sqlConn, err := app.ConnectDB(cfgs.DB_CONNECTION_URI)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	redisConn, err := app.ConnectReids(cfgs.REDIS_CONNECTION_URI)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	app.DB = &dbrepo.DBRepo{SqlConn: sqlConn, RedisConn: redisConn}
+	app.Cfg = &cfgs
+
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: go run cmd/main.go [command]")
 		fmt.Println("Commands:")
-		fmt.Println("  up        - Run all up migrations")
-		fmt.Println("  down      - Run all down migrations")
-		fmt.Println("  create    - Create new migration files")
+		fmt.Println("  migrate [steps] - Run migrations (optional number of steps)")
+		fmt.Println("  create [name]  - Create new migration files")
 		os.Exit(1)
 	}
 
@@ -35,16 +44,16 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			db.Migrate(step)
+			app.Migrate(step)
 		} else {
-			db.Migrate(0)
+			app.Migrate(0)
 		}
 	case "create":
 		if len(os.Args) < 3 {
 			fmt.Println("Please provide a name for the migration")
 			os.Exit(1)
 		}
-		db.GenerateMigration(os.Args[2])
+		app.GenerateMigration(os.Args[2])
 	default:
 		// start the server
 		err := http.ListenAndServe(":8080", app.Routes())

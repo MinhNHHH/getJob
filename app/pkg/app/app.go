@@ -4,12 +4,15 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/MinhNHHH/get-job/pkg/cfgs"
+	"github.com/MinhNHHH/get-job/pkg/database/repository"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 )
 
 type Application struct {
-	DB *Database
+	DB  repository.DatabaseRepo
+	Cfg *cfgs.Config
 }
 
 type NotificationRequest struct {
@@ -28,7 +31,7 @@ type TaskInfo struct {
 type JobDetail struct {
 	Title       string `json:"title"`
 	CompanyName string `json:"company_name"`
-	ComapnyUrl  string `json:"company_url"`
+	ComapnyUrl  string `json:"company_uri"`
 	Location    string `json:"location"`
 	Description string `json:"description"`
 }

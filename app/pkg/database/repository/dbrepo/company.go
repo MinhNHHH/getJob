@@ -9,21 +9,21 @@ import (
 	"github.com/MinhNHHH/get-job/pkg/database/data"
 )
 
-func (p *PostgresDBRepo) AllCompanies() ([]*data.Company, error) {
+func (p *DBRepo) AllCompanies() ([]*data.Companies, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	query := `select id, name, url from company order by name`
+	query := `select id, name, url, created_at, updated_at from companies order by name`
 
-	rows, err := p.DB.SQLConn.QueryContext(ctx, query)
+	rows, err := p.SqlConn.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var companies []*data.Company
+	var companies []*data.Companies
 	for rows.Next() {
-		var company data.Company
+		var company data.Companies
 		err := rows.Scan(
 			&company.Id,
 			&company.Name,
@@ -41,15 +41,20 @@ func (p *PostgresDBRepo) AllCompanies() ([]*data.Company, error) {
 	return companies, nil
 }
 
-func (p *PostgresDBRepo) InsertCompany(c *data.Company) (int, error) {
+func (p *DBRepo) InsertCompany(c *data.Companies) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	var newID int
-	stmt := `insert into company (name, url, created_at, updated_at)
-		values ($1, $2, $3, $4) returning id`
+	tx, err := p.SqlConn.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
 
-	err := p.DB.SQLConn.QueryRowContext(ctx, stmt,
+	var newID int
+	stmt := `INSERT INTO companies (name, url, created_at, updated_at)
+			 VALUES ($1, $2, $3, $4) RETURNING id`
+
+	err = tx.QueryRowContext(ctx, stmt,
 		c.Name,
 		c.Url,
 		time.Now(),
@@ -57,26 +62,41 @@ func (p *PostgresDBRepo) InsertCompany(c *data.Company) (int, error) {
 	).Scan(&newID)
 
 	if err != nil {
+		tx.Rollback()
 		return 0, err
 	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+
 	return newID, nil
 }
 
-func (p *PostgresDBRepo) IsExisted(companyName string) bool {
+func (p *DBRepo) IsExisted(companyName string) (bool, int) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
 	// Use parameterized query to avoid SQL injection
-	query := "SELECT id FROM company WHERE name = $1"
+	query := "SELECT id FROM companies WHERE name = $1"
 
 	// Execute the query
-	rows, err := p.DB.SQLConn.QueryContext(ctx, query, companyName)
+	rows, err := p.SqlConn.QueryContext(ctx, query, companyName)
 	if err != nil {
 		fmt.Println("Error executing query:", err)
-		return false
+		return false, 0
 	}
 	defer rows.Close()
 
 	// If a row exists, that means the company exists in the database
-	return rows.Next()
+	if rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			fmt.Println("Error scanning id:", err)
+			return false, 0
+		}
+		return true, id
+	}
+
+	return false, 0
 }

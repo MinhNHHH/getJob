@@ -8,13 +8,13 @@ import (
 	"github.com/MinhNHHH/get-job/pkg/database/data"
 )
 
-func (p *PostgresDBRepo) AllJobs() ([]*data.Job, error) {
+func (p *DBRepo) AllJobs() ([]*data.Job, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
 	query := `select id, title, location, description from jobs order by created_at`
 
-	rows, err := p.DB.SQLConn.QueryContext(ctx, query)
+	rows, err := p.SqlConn.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ func (p *PostgresDBRepo) AllJobs() ([]*data.Job, error) {
 	return jobs, nil
 }
 
-func (p *PostgresDBRepo) InsertJob(j *data.Job) (int, error) {
+func (p *DBRepo) InsertJob(j *data.Job) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
@@ -49,7 +49,7 @@ func (p *PostgresDBRepo) InsertJob(j *data.Job) (int, error) {
 	stmt := `insert into jobs (title, location, description, company_id, created_at, updated_at)
 		values ($1, $2, $3, $4, $5, $6) returning id`
 
-	err := p.DB.SQLConn.QueryRowContext(ctx, stmt,
+	err := p.SqlConn.QueryRowContext(ctx, stmt,
 		j.Title,
 		j.Location,
 		j.Description,
@@ -64,7 +64,22 @@ func (p *PostgresDBRepo) InsertJob(j *data.Job) (int, error) {
 	return newID, nil
 }
 
-// func (p *PostgresDBRepo) UpdateJob(j data.Job) error {
+func (p *DBRepo) IsJobExisted(jobTitle, location string, companyId int) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	query := "SELECT id FROM jobs WHERE title = $1 and location = $2 and company_id = $3"
+
+	rows, err := p.SqlConn.QueryContext(ctx, query, jobTitle, location, companyId)
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+
+	return rows.Next()
+}
+
+// func (p *DBRepo) UpdateJob(j data.Job) error {
 // 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 // 	defer cancel()
 

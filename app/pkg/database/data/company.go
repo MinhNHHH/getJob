@@ -2,7 +2,7 @@ package data
 
 import "time"
 
-type Company struct {
+type Companies struct {
 	Id        int       `db:"id"`
 	Name      string    `db:"name"`
 	Url       string    `db:"url"`

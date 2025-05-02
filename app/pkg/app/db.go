@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/MinhNHHH/get-job/pkg/cfgs"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -16,31 +15,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-type Database struct {
-	SQLConn     *sql.DB
-	RedisClient *redis.Client
-	Cfgs        cfgs.Config
-}
-
-func NewDB(cfg cfgs.Config) *Database {
-	conn, err := ConnectDB(cfg.DB_CONNECTION_URI)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	rclient, err := NewRedisClient(cfg.REDIS_CONNECTION_URI)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return &Database{
-		Cfgs:        cfg,
-		RedisClient: rclient,
-		SQLConn:     conn,
-	}
-}
-
-func NewRedisClient(redisURL string) (*redis.Client, error) {
+func (app Application) ConnectReids(redisURL string) (*redis.Client, error) {
 	opt, err := redis.ParseURL(redisURL)
 	if err != nil {
 		return nil, err
@@ -48,7 +23,7 @@ func NewRedisClient(redisURL string) (*redis.Client, error) {
 	return redis.NewClient(opt), nil
 }
 
-func ConnectDB(dbURL string) (*sql.DB, error) {
+func (app Application) ConnectDB(dbURL string) (*sql.DB, error) {
 	// Open the database connection
 	conn, err := sql.Open("pgx", dbURL)
 	if err != nil {
@@ -72,7 +47,7 @@ func ensureMigrationsDir() error {
 	return nil
 }
 
-func (db Database) GenerateMigration(name string) {
+func (app Application) GenerateMigration(name string) {
 	err := ensureMigrationsDir()
 	if err != nil {
 		log.Fatal(err)
@@ -95,10 +70,10 @@ func (db Database) GenerateMigration(name string) {
 	fmt.Printf("Created migration files:\n%s\n%s\n", upPath, downPath)
 }
 
-func (db Database) Migrate(step int) {
+func (app Application) Migrate(step int) {
 	m, err := migrate.New(
 		"file://migrations/",
-		db.Cfgs.DB_CONNECTION_URI,
+		app.Cfg.DB_CONNECTION_URI,
 	)
 	if err != nil {
 		log.Fatal(err)

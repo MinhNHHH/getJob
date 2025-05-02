@@ -7,7 +7,7 @@ class LinkedinCrawler(JobCrawlBase):
     def get_jobs(self):
         job_ids = self.__get_job_ids()
         jobs = []
-        for job_id in job_ids[:2]:
+        for job_id in job_ids[:10]:
             url_view = f"https://www.linkedin.com/jobs/view/{job_id}"
             print("Crawling:", url_view)
             soup = self.parser_html(url_view)

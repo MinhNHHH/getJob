@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/MinhNHHH/get-job/pkg/cfgs"
@@ -36,13 +35,35 @@ type JobDetail struct {
 	Description string `json:"description"`
 }
 
-var ctx = context.Background()
+func withCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set CORS headers for every response
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+
+		// Handle preflight OPTIONS request
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		// Continue to actual handler
+		next.ServeHTTP(w, r)
+	})
+}
+
+// var ctx = context.Background()
 
 func (app *Application) Routes() http.Handler {
 	mux := chi.NewRouter()
 	// register middleware
 	mux.Use(middleware.Recoverer)
+	mux.Use(withCORS)
 	// register routes
 	mux.Post("/notification", app.Notification)
+	mux.Route("/api", func(r chi.Router) {
+		r.Post("/generate-cover-letter", app.GenerateCoverLetter)
+	})
 	return mux
 }

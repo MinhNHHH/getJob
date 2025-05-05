@@ -40,6 +40,7 @@ func (app Application) ConnectDB(dbURL string) (*sql.DB, error) {
 
 func ensureMigrationsDir() error {
 	if _, err := os.Stat("migrations"); os.IsNotExist(err) {
+		// Create the "migrations" folder with permission 0755 (owner: read/write/execute, others: read/execute)
 		if err := os.MkdirAll("migrations", 0755); err != nil {
 			return fmt.Errorf("failed to create migrations directory: %v", err)
 		}
@@ -70,10 +71,10 @@ func (app Application) GenerateMigration(name string) {
 	fmt.Printf("Created migration files:\n%s\n%s\n", upPath, downPath)
 }
 
-func (app Application) Migrate(step int) {
+func (app Application) Migrate(step int, uri string) {
 	m, err := migrate.New(
 		"file://migrations/",
-		app.Cfg.DB_CONNECTION_URI,
+		uri,
 	)
 	if err != nil {
 		log.Fatal(err)

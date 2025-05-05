@@ -8,13 +8,14 @@ import (
 	"github.com/joho/godotenv"
 )
 
-type Config struct {
+type Configs struct {
 	DB_CONNECTION_URI    string
 	REDIS_CONNECTION_URI string
+	LLM_URI              string
 }
 
-func LoadConfigs() Config {
-	defaultConfig := Config{}
+func LoadConfigs() Configs {
+	defaultConfig := Configs{}
 	err := godotenv.Load()
 	if err != nil {
 		log.Printf("Warning: Error loading .env file: %v", err)
@@ -32,8 +33,5 @@ func LoadConfigs() Config {
 			log.Fatalf("Error: Required environment variable %s not set", envKey)
 		}
 	}
-
-	// Log the final config for debugging
-	log.Printf("Loaded config: %+v", defaultConfig)
 	return defaultConfig
 }

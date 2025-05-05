@@ -1,6 +1,7 @@
 package dbrepo
 
 import (
+	"context"
 	"database/sql"
 	"time"
 
@@ -8,6 +9,8 @@ import (
 )
 
 const dbTimeout = time.Second * 3
+
+var ctx = context.Background()
 
 type DBRepo struct {
 	SqlConn   *sql.DB

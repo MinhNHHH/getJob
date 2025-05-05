@@ -9,6 +9,13 @@ const (
 	Model = "deepseek-r1:1.5b"
 )
 
+type JobInfo struct {
+	JobTitle    string `json:"job_title"`
+	CompanyName string `json:"company_name"`
+	Location    string `json:"location"`
+	Description string `json:"description"`
+}
+
 func removeThinkTags(response string) string {
 	// Find the start and end positions of <think> tags
 	startIdx := strings.Index(response, "<think>")
@@ -25,17 +32,20 @@ func removeThinkTags(response string) string {
 	return response
 }
 
-func GenerateCoverLetter(jobTitle, companyName, location, description string) (string, error) {
+func (llm *LLM) GenerateCoverLetter(jobInfo JobInfo, resume string) (string, error) {
 	prompt := fmt.Sprintf(`
 	You are a cover letter generator.
-	You are given a job title, company name, location, and description.
-	You need to generate a cover letter for the job.
+	You are given a job title, company name, location and description.
+	You need to generate a cover letter for the job base on my resume.
+	Could you help me brief some information from my CV and fill them to cover letter.
+	The cover letter should be smaller than 400 words.
 	
 	Job Title: %s
 	Company Name: %s
 	Location: %s
 	Description: %s
-	`, jobTitle, companyName, location, description)
+	Resume: %s
+	`, jobInfo.JobTitle, jobInfo.CompanyName, jobInfo.Location, jobInfo.Description, resume)
 
 	payload := LLMPayload{
 		Model:  Model,
@@ -43,7 +53,7 @@ func GenerateCoverLetter(jobTitle, companyName, location, description string) (s
 		Stream: false,
 	}
 
-	response, err := LLMApi("http://localhost:11434/api/generate", "POST", payload)
+	response, err := llm.LLMAPI(payload)
 	if err != nil {
 		return "", err
 	}

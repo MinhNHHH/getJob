@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/MinhNHHH/get-job/pkg/cfgs"
 )
 
 type LLMPayload struct {
@@ -15,12 +17,21 @@ type LLMPayload struct {
 
 type LLMResponse struct {
 	Response string `json:"response"`
-	Model    string `json:"model"`
 }
 
-func LLMApi(url, method string, payload LLMPayload) (LLMResponse, error) {
-	client := &http.Client{}
+type LLM struct {
+	Cfgs cfgs.Configs
+}
 
+func NewLLM(config cfgs.Configs) LLM {
+	return LLM{
+		Cfgs: config,
+	}
+}
+
+func (llm *LLM) LLMAPI(payload LLMPayload) (LLMResponse, error) {
+	client := &http.Client{}
+	method := "POST"
 	// Convert payload to JSON string
 	payloadStr, err := json.Marshal(payload)
 	if err != nil {
@@ -28,7 +39,7 @@ func LLMApi(url, method string, payload LLMPayload) (LLMResponse, error) {
 	}
 
 	// Create a new request with the specified method
-	req, err := http.NewRequest(method, url, strings.NewReader(string(payloadStr)))
+	req, err := http.NewRequest(method, llm.Cfgs.LLM_URI, strings.NewReader(string(payloadStr)))
 	if err != nil {
 		return LLMResponse{}, err
 	}

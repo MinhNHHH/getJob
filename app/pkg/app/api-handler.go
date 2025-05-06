@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/MinhNHHH/get-job/pkg/database/data"
 	"github.com/MinhNHHH/get-job/pkg/llm"
@@ -64,7 +65,7 @@ func (app *Application) InsertJob(taskInfo TaskInfo) {
 			continue
 		}
 
-		_, err := app.DB.InsertJob(&data.Job{
+		_, err := app.DB.InsertJob(&data.Jobs{
 			Title:       job.Title,
 			Location:    job.Location,
 			Description: job.Description,
@@ -142,6 +143,49 @@ func (app *Application) GenerateCoverLetter(w http.ResponseWriter, r *http.Reque
 	json.NewEncoder(w).Encode(coverLetter)
 }
 
-func GetAllJobs(w http.ResponseWriter, r *http.Request) {
+func (app *Application) GetAllJobs(w http.ResponseWriter, r *http.Request) {
+	title := r.URL.Query().Get("title")
+	companyName := r.URL.Query().Get("company")
+	location := r.URL.Query().Get("location")
+	page, err := strconv.Atoi(r.URL.Query().Get("page"))
+	if err != nil {
+		log.Println("Invalid page number:", err)
+		http.Error(w, "Invalid page number", http.StatusBadRequest)
+		return
+	}
+	pageSize, err := strconv.Atoi(r.URL.Query().Get("pageSize"))
+	if err != nil {
+		log.Println("Invalid page size:", err)
+		http.Error(w, "Invalid page size", http.StatusBadRequest)
+		return
+	}
 
+	jobs, total, err := app.DB.AllJobs(title, companyName, location, page, pageSize)
+	if err != nil {
+		log.Println("Cannot find jobs:", err)
+		http.Error(w, "Failed to retrieve jobs", http.StatusInternalServerError)
+		return
+	}
+
+	// Create a response structure with pagination info
+	response := struct {
+		Jobs       []*data.Jobs `json:"jobs"`
+		TotalCount int          `json:"total_count"`
+		Page       int          `json:"page"`
+		PageSize   int          `json:"page_size"`
+		TotalPages int          `json:"total_pages"`
+	}{
+		Jobs:       jobs,
+		TotalCount: total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: (total + 9) / 10,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding jobs: %v", err)
+		http.Error(w, "Error encoding response", http.StatusInternalServerError)
+		return
+	}
 }

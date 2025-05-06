@@ -66,6 +66,7 @@ func (app *Application) Routes() http.Handler {
 	mux.Post("/notification", app.Notification)
 	mux.Route("/api", func(r chi.Router) {
 		r.Post("/generate-cover-letter", app.GenerateCoverLetter)
+		r.Get("/jobs", app.GetAllJobs)
 	})
 	return mux
 }

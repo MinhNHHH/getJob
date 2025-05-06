@@ -2,46 +2,93 @@ package dbrepo
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
 	"github.com/MinhNHHH/get-job/pkg/database/data"
 )
 
-func (p *DBRepo) AllJobs() ([]*data.Job, error) {
+func (p *DBRepo) AllJobs(title, companyName, location string, page, pageSize int) ([]*data.Jobs, int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	query := `select id, title, location, description from jobs order by created_at`
+	// Base query for counting total records
+	countQuery := `select count(*) from jobs as j 
+		inner join companies as c on j.company_id = c.id 
+		where 1=1`
 
-	rows, err := p.SqlConn.QueryContext(ctx, query)
+	// Base query for fetching records
+	query := `select j.id, j.title, j.location, j.description, j.company_id, c.name
+		from jobs as j 
+		inner join companies as c on j.company_id = c.id 
+		where 1=1`
+
+	args := []interface{}{}
+	argCount := 1
+
+	if title != "" {
+		query += fmt.Sprintf(" AND j.title ILIKE $%d", argCount)
+		countQuery += fmt.Sprintf(" AND j.title ILIKE $%d", argCount)
+		args = append(args, "%"+title+"%")
+		argCount++
+	}
+
+	if companyName != "" {
+		query += fmt.Sprintf(" AND c.name ILIKE $%d", argCount)
+		countQuery += fmt.Sprintf(" AND c.name ILIKE $%d", argCount)
+		args = append(args, "%"+companyName+"%")
+		argCount++
+	}
+
+	if location != "" {
+		query += fmt.Sprintf(" AND j.location ILIKE $%d", argCount)
+		countQuery += fmt.Sprintf(" AND j.location ILIKE $%d", argCount)
+		args = append(args, "%"+location+"%")
+		argCount++
+	}
+
+	// Add pagination
+	offset := (page - 1) * pageSize
+	query += fmt.Sprintf(" order by j.created_at desc LIMIT $%d OFFSET $%d", argCount, argCount+1)
+	args = append(args, pageSize, offset)
+
+	// Get total count
+	var total int
+	err := p.SqlConn.QueryRowContext(ctx, countQuery, args[:len(args)-2]...).Scan(&total)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
+	}
+
+	// Get paginated results
+	rows, err := p.SqlConn.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
 	}
 	defer rows.Close()
 
-	var jobs []*data.Job
+	var jobs []*data.Jobs
 	for rows.Next() {
-		var job data.Job
+		var job data.Jobs
 		err := rows.Scan(
 			&job.Id,
 			&job.Title,
 			&job.Location,
 			&job.Description,
-			&job.CreatedAt,
-			&job.UpdatedAt,
+			&job.CompanyId,
+			&job.CompanyName,
 		)
 		if err != nil {
 			log.Println("Error scanning", err)
-			return nil, err
+			return nil, 0, err
 		}
 
 		jobs = append(jobs, &job)
 	}
-	return jobs, nil
+	return jobs, total, nil
 }
 
-func (p *DBRepo) InsertJob(j *data.Job) (int, error) {
+func (p *DBRepo) InsertJob(j *data.Jobs) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 

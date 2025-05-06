@@ -16,8 +16,8 @@ type DatabaseRepo interface {
 	InsertCompany(c *data.Companies) (int, error)
 	IsExisted(companyName string) (bool, int)
 	AllCompanies() ([]*data.Companies, error)
-	InsertJob(j *data.Job) (int, error)
-	AllJobs() ([]*data.Job, error)
+	InsertJob(j *data.Jobs) (int, error)
+	AllJobs(title, companyName, location string, page, pageSize int) ([]*data.Jobs, int, error)
 	IsJobExisted(jobTitle, location string, companyId int) bool
 	RedisGet(taskID string) (string, error)
 }

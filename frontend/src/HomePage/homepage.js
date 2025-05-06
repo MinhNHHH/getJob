@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -18,8 +18,11 @@ import {
   TextField,
   Box,
   Grid,
+  CircularProgress,
+  TablePagination,
 } from "@mui/material";
 import api from "../api/fetch";
+import axios from "axios";
 
 const HomePage = () => {
   const [open, setOpen] = useState(false);
@@ -27,28 +30,37 @@ const HomePage = () => {
   const [coverLetterOpen, setCoverLetterOpen] = useState(false);
   const [coverLetter, setCoverLetter] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
+  const [isGenerating, setIsGenerating] = useState(false);
   const fileInputRef = useRef(null);
 
-  // Sample data - replace with your actual data
-  const jobs = [
-    {
-      id: 1,
-      jobTitle: "Software Engineer",
-      companyName: "Tech Corp",
-      location: "San Francisco, CA",
-      description:
-        "<p>Looking for a skilled software engineer to join our team...</p><ul><li>5+ years of experience</li><li>Strong problem-solving skills</li><li>Excellent communication abilities</li></ul>",
-    },
-    {
-      id: 2,
-      jobTitle: "Software Engineer",
-      companyName: "Tech Corp",
-      location: "San Francisco, CA",
-      description:
-        "<p>Looking for a skilled softw1111are engineer to join our team...</p><ul><li>5+ years of experience</li><li>Strong problem-solving skills</li><li>Excellent communication abilities</li></ul>",
-    },
-    // Add more job listings as needed
-  ];
+  const [jobs, setJobs] = useState([]);
+  const [filters, setFilters] = useState({
+    title: "",
+    company: "",
+    location: "",
+  });
+
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [totalJobs, setTotalJobs] = useState(0);
+
+  const fetchJobs = async () => {
+    try {
+      const response = await api.get(
+        `/api/jobs?page=${page + 1}&pageSize=${rowsPerPage}&title=${
+          filters.title
+        }&company=${filters.company}&location=${filters.location}`
+      );
+      setJobs(response.data.jobs);
+      setTotalJobs(response.data.total_count);
+    } catch (error) {
+      console.error("Error fetching jobs:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchJobs();
+  }, [page, rowsPerPage, filters.title, filters.company, filters.location]);
 
   const handleClickOpen = (job) => {
     setSelectedJob(job);
@@ -96,28 +108,32 @@ const HomePage = () => {
     if (!selectedJob) return;
 
     try {
+      setIsGenerating(true);
       // Create FormData instance
       const formData = new FormData();
-      
+
       // Add job details as JSON string
-      formData.append('job_details', JSON.stringify({
-        job_title: selectedJob.jobTitle,
-        company_name: selectedJob.companyName,
-        location: selectedJob.location,
-        description: selectedJob.description,
-      }));
+      formData.append(
+        "job_details",
+        JSON.stringify({
+          job_title: selectedJob.Title,
+          company_name: selectedJob.CompanyName,
+          location: selectedJob.Location,
+          description: selectedJob.Description,
+        })
+      );
 
       // Add file if selected
       if (selectedFile) {
-        formData.append('resume', selectedFile);
+        formData.append("resume", selectedFile);
       }
 
       const response = await api.post("/api/generate-cover-letter", formData, {
         headers: {
-          'Content-Type': 'multipart/form-data',
+          "Content-Type": "multipart/form-data",
         },
-      });      
-      
+      });
+
       if (response) {
         setCoverLetter(response.data);
       } else {
@@ -125,7 +141,25 @@ const HomePage = () => {
       }
     } catch (error) {
       console.error("Error generating cover letter:", error);
+    } finally {
+      setIsGenerating(false);
     }
+  };
+
+  const handleFilterChange = (field, value) => {
+    setFilters((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
   };
 
   return (
@@ -133,6 +167,39 @@ const HomePage = () => {
       <Typography variant="h4" gutterBottom>
         Job Listings
       </Typography>
+
+      <Box sx={{ mb: 3 }}>
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={4}>
+            <TextField
+              fullWidth
+              label="Job Title"
+              value={filters.title}
+              onChange={(e) => handleFilterChange("title", e.target.value)}
+              size="small"
+            />
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <TextField
+              fullWidth
+              label="Company"
+              value={filters.company}
+              onChange={(e) => handleFilterChange("company", e.target.value)}
+              size="small"
+            />
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <TextField
+              fullWidth
+              label="Location"
+              value={filters.location}
+              onChange={(e) => handleFilterChange("location", e.target.value)}
+              size="small"
+            />
+          </Grid>
+        </Grid>
+      </Box>
+
       <TableContainer component={Paper}>
         <Table sx={{ minWidth: 650 }} aria-label="job listings table">
           <TableHead>
@@ -144,41 +211,58 @@ const HomePage = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {jobs.map((job) => (
-              <TableRow key={job.id}>
-                <TableCell>{job.jobTitle}</TableCell>
-                <TableCell>{job.companyName}</TableCell>
-                <TableCell>{job.location}</TableCell>
-                <TableCell>
-                  <Button
-                    variant="outlined"
-                    onClick={() => handleClickOpen(job)}
-                    style={{ marginRight: "8px" }}
-                  >
-                    View Details
-                  </Button>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    onClick={() => handleApply(job)}
-                  >
-                    Apply
-                  </Button>
+            {jobs && jobs.length > 0 ? (
+              jobs.map((job) => (
+                <TableRow key={job.Id}>
+                  <TableCell>{job.Title}</TableCell>
+                  <TableCell>{job.CompanyName}</TableCell>
+                  <TableCell>{job.Location}</TableCell>
+                  <TableCell>
+                    <Button
+                      variant="outlined"
+                      onClick={() => handleClickOpen(job)}
+                      style={{ marginRight: "8px" }}
+                    >
+                      View Details
+                    </Button>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      onClick={() => handleApply(job)}
+                    >
+                      Apply
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={4} align="center">
+                  No jobs found
                 </TableCell>
               </TableRow>
-            ))}
+            )}
           </TableBody>
         </Table>
+        <TablePagination
+          rowsPerPageOptions={[5, 10, 25]}
+          component="div"
+          count={totalJobs}
+          rowsPerPage={rowsPerPage}
+          page={page}
+          onPageChange={handleChangePage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+        />
       </TableContainer>
 
       <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
         <DialogTitle>
-          {selectedJob?.jobTitle} - {selectedJob?.companyName}
+          {selectedJob?.Title} - {selectedJob?.CompanyName}
         </DialogTitle>
         <DialogContent>
           <DialogContentText>
             <div
-              dangerouslySetInnerHTML={{ __html: selectedJob?.description }}
+              dangerouslySetInnerHTML={{ __html: selectedJob?.Description }}
             />
           </DialogContentText>
         </DialogContent>
@@ -195,7 +279,7 @@ const HomePage = () => {
         fullWidth
       >
         <DialogTitle>
-          Apply for {selectedJob?.jobTitle} at {selectedJob?.companyName}
+          Apply for {selectedJob?.Title} at {selectedJob?.CompanyName}
         </DialogTitle>
         <DialogContent>
           <DialogContentText>
@@ -213,6 +297,7 @@ const HomePage = () => {
             variant="outlined"
             value={coverLetter}
             onChange={(e) => setCoverLetter(e.target.value)}
+            disabled={isGenerating}
           />
           <Box sx={{ mt: 2 }}>
             <Grid container spacing={2}>
@@ -229,8 +314,15 @@ const HomePage = () => {
                 </Button>
               </Grid>
               <Grid item>
-                <Button variant="outlined" onClick={generateCoverLetter}>
-                  Generate Cover Letter
+                <Button
+                  variant="outlined"
+                  onClick={generateCoverLetter}
+                  disabled={isGenerating}
+                  startIcon={
+                    isGenerating ? <CircularProgress size={20} /> : null
+                  }
+                >
+                  {isGenerating ? "Generating..." : "Generate Cover Letter"}
                 </Button>
               </Grid>
             </Grid>

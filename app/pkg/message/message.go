@@ -31,5 +31,5 @@ const (
 	TCAuthenticated   = "Authenticated"
 	TCUnauthenticated = "Unauthenticated"
 
-	TCUnsupportedVersion = "UnsupportedVersion"
+	TCUnConnected = "Unconnected"
 )

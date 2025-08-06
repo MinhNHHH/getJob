@@ -13,6 +13,7 @@ import {
   Paper,
 } from "@mui/material";
 import { get } from "../api/fetch";
+import { RTC_ANSWER, WEBRTC_DATA_CHANNEL, RTC_CANDIDATE, RTC_OFFER, rtcConfiguration, RTC_CONNECT, ACCECPT_CONNECT } from "../constants";
 import { Videocam, VideocamOff, Mic, MicOff } from "@mui/icons-material";
 
 const WebRTCClient = () => {
@@ -31,17 +32,6 @@ const WebRTCClient = () => {
   const peerConnectionRef = useRef(null);
   const signalingSocketRef = useRef(null);
   const localStreamRef = useRef(null);
-
-  // WebRTC configuration
-  const rtcConfiguration = {
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" },
-      { urls: "stun:stun1.l.google.com:19302" },
-      { urls: "stun:stun2.l.google.com:19302" },
-      { urls: "stun:stun3.l.google.com:19302" },
-      { urls: "stun:stun4.l.google.com:19302" },
-    ],
-  };
 
   // Initialize local media stream
   const initializeLocalStream = async () => {
@@ -68,7 +58,6 @@ const WebRTCClient = () => {
   // Create peer connection
   const createPeerConnection = () => {
     const pc = new RTCPeerConnection(rtcConfiguration);
-
     // Add local stream tracks to peer connection
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => {
@@ -77,13 +66,13 @@ const WebRTCClient = () => {
     }
 
     // Handle incoming remote stream
-    pc.ontrack = (event) => {
-      console.log("Received remote stream");
-      setRemoteStream(event.streams[0]);
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = event.streams[0];
-      }
-    };
+    // pc.ontrack = (event) => {
+    //   console.log("Received remote stream");
+    //   setRemoteStream(event.streams[0]);
+    //   if (remoteVideoRef.current) {
+    //     remoteVideoRef.current.srcObject = event.streams[0];
+    //   }
+    // };
 
     // Handle connection state changes
     pc.onconnectionstatechange = () => {
@@ -103,13 +92,31 @@ const WebRTCClient = () => {
       }
     };
 
+    const dataChannel = pc.createDataChannel(WEBRTC_DATA_CHANNEL);
+
+    dataChannel.onmessage = async (event) => {
+      const message = await event.data.text();
+      const messageObject = JSON.parse(message);
+      console.log("Data channel message", messageObject);
+    };
+    dataChannel.onopen = () => {
+      console.log("Data channel opened");
+      dataChannel.send(JSON.stringify({
+        Type: "Data",
+        Data: "123123444444"
+      }));
+    };
+
+    dataChannel.onclose = () => {
+      console.log("Data channel closed");
+    };
+
     // Handle ICE candidate events
     pc.onicecandidate = (event) => {
       if (event.candidate) {
         sendSignalingMessage({
-          type: "Candidate",
-          data: event.candidate,
-          // roomId: roomId
+          Type: RTC_CANDIDATE,
+          Data: JSON.stringify(event.candidate),
         });
         console.log("Candidate", event.candidate);
       }
@@ -132,7 +139,8 @@ const WebRTCClient = () => {
 
       socket.onmessage = async (event) => {
         const message = JSON.parse(event.data);
-        await handleSignalingMessage(message);
+        console.log("message", message);
+        await handleWebsocketMessage(message);
       };
 
       socket.onerror = (error) => {
@@ -159,55 +167,53 @@ const WebRTCClient = () => {
       signalingSocketRef.current &&
       signalingSocketRef.current.readyState === WebSocket.OPEN
     ) {
+      const msg = { ...message, To: "host"}
       signalingSocketRef.current.send(JSON.stringify(message));
     }
   };
 
-  // Handle incoming signaling messages
-  const handleSignalingMessage = async (message) => {
+  // Handle incoming websocket messages
+  const handleWebsocketMessage = async (message) => {
     const pc = peerConnectionRef.current;
-
-    switch (message.type) {
-      case "Offer":
+    switch (message.Type) {
+      case RTC_OFFER:
         console.log("Received offer");
-        await pc.setRemoteDescription(new RTCSessionDescription(message.offer));
+        const offer = JSON.parse(message.Data);
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         sendSignalingMessage({
-          type: "Answer",
-          data: answer,
+          Type: RTC_ANSWER,
+          Data: JSON.stringify(answer),
         });
         break;
-
-      case "Answer":
+      case RTC_ANSWER:
         console.log("Received answer");
+        const answerData = JSON.parse(message.Data);
         await pc.setRemoteDescription(
-          new RTCSessionDescription(message.answer)
+          new RTCSessionDescription(answerData)
         );
         break;
-
-      case "Candidate":
+      case RTC_CANDIDATE:
         console.log("Received ICE candidate");
         if (pc.remoteDescription) {
-          await pc.addIceCandidate(new RTCIceCandidate(message.candidate));
+          const candidate = JSON.parse(message.Data);
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
         }
         break;
-      
-      //   case 'user-joined':
-      //     console.log('User joined room');
-      //     if (pc.signalingState === 'stable') {
-      //   const offer = await pc.createOffer();
-      //       await pc.setLocalDescription(offer);
-      //       sendSignalingMessage({
-      //         type: 'offer',
-      //         offer: offer,
-      //         roomId: roomId
-      //       });
-      //     }
-      //     break;
-
+      case RTC_CONNECT:
+        console.log('User joined room');
+        if (pc.signalingState === 'stable') {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          sendSignalingMessage({
+            Type: RTC_OFFER,
+            Data: JSON.stringify(offer),
+          });
+        }
+        break;
       default:
-        console.log("Unknown message type:", message.type);
+        break;
     }
   };
 
@@ -239,11 +245,11 @@ const WebRTCClient = () => {
           // Create peer connection
           createPeerConnection();
 
-          // Join room
-          // sendSignalingMessage({
-          //   type: 'join-room',
-          //   roomId: roomId
-          // });
+          // Send first message to initialize peer connection
+          sendSignalingMessage({
+            Type: RTC_CONNECT,
+            Data: ACCECPT_CONNECT,
+          });
         } else {
           setError("Failed to connect to signaling server");
           setIsConnecting(false);

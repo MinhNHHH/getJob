@@ -1,0 +1,14 @@
+fastapi==0.79.0         # api framework
+uvicorn==0.18.2         # web server
+psycopg2-binary==2.9.3  # postgres connector
+#psycopg2==2.9.3         # postgres connector -- recommended for prod. currently uncomment because install it is a pain
+pymongo==4.2.0          # MongoDB connector
+SQLAlchemy==1.4.39      # SQL ORM
+alembic==1.8.1          # handling migration
+transformers[torch]     # load pretrained model sentiment
+python-dotenv==0.20.0   # load env from dot files
+python-dateutil==2.8.2
+scipy==1.9.1            # providing additional tools for array computing
+pytz==2022.2.1          # allows accurate and cross platform timezone calculations
+fastapi-cache2==0.1.9   # framework support api caching
+apscheduler==3.9.1      # Scheduler library

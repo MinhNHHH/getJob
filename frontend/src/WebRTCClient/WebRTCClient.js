@@ -18,7 +18,6 @@ import { Videocam, VideocamOff, Mic, MicOff } from "@mui/icons-material";
 
 const WebRTCClient = () => {
   const [localStream, setLocalStream] = useState(null);
-  const [remoteStream, setRemoteStream] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState(null);
@@ -61,7 +60,44 @@ const WebRTCClient = () => {
     // Add local stream tracks to peer connection
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => {
+        console.log("Adding track", track);
         pc.addTrack(track, localStreamRef.current);
+        if (track.kind === "audio") {
+          console.log("Audio track added:", track);
+          // Create an AudioContext if not already created
+          if (!window._audioContext) {
+            window._audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          }
+          const audioContext = window._audioContext;
+
+          // Create a MediaStream containing only this audio track
+          const singleTrackStream = new MediaStream([track]);
+
+          // Create a MediaStreamSource from the audio track
+          const source = audioContext.createMediaStreamSource(singleTrackStream);
+
+          // Create a ScriptProcessorNode to access audio buffer data
+          // (deprecated, but still widely supported; for modern, use AudioWorklet)
+          const processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+          source.connect(processor);
+          processor.connect(audioContext.destination);
+
+          processor.onaudioprocess = (audioProcessingEvent) => {
+            // The inputBuffer is the audio buffer you want
+            const inputBuffer = audioProcessingEvent.inputBuffer;
+            // For example, get the first channel's data
+            const channelData = inputBuffer.getChannelData(0);
+            // Do something with channelData (Float32Array)
+            // For demonstration, just log the buffer length
+            console.log("Audio buffer length:", channelData);
+            // You can process or store the buffer as needed here
+          };
+
+          // Optionally, store references if you want to stop processing later
+          window._audioProcessor = processor;
+          window._audioSource = source;
+        }
       });
     }
 
@@ -88,7 +124,7 @@ const WebRTCClient = () => {
       ) {
         setIsConnected(false);
         setIsConnecting(false);
-        setRemoteStream(null);
+        // setRemoteStream(null);
       }
     };
 
@@ -139,7 +175,6 @@ const WebRTCClient = () => {
 
       socket.onmessage = async (event) => {
         const message = JSON.parse(event.data);
-        console.log("message", message);
         await handleWebsocketMessage(message);
       };
 
@@ -167,8 +202,8 @@ const WebRTCClient = () => {
       signalingSocketRef.current &&
       signalingSocketRef.current.readyState === WebSocket.OPEN
     ) {
-      const msg = { ...message, To: "host"}
-      signalingSocketRef.current.send(JSON.stringify(message));
+      const msg = { ...message, To: "host" }
+      signalingSocketRef.current.send(JSON.stringify(msg));
     }
   };
 
@@ -278,7 +313,7 @@ const WebRTCClient = () => {
     }
 
     setLocalStream(null);
-    setRemoteStream(null);
+    // setRemoteStream(null);
     setIsConnected(false);
     setIsConnecting(false);
     setConnectionState("disconnected");
@@ -454,32 +489,6 @@ const WebRTCClient = () => {
                 overflow: "hidden",
               }}
             >
-              {remoteStream ? (
-                <video
-                  ref={remoteVideoRef}
-                  autoPlay
-                  playsInline
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                  }}
-                />
-              ) : (
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    height: "100%",
-                    color: "white",
-                  }}
-                >
-                  <Typography variant="body1">
-                    Waiting for remote stream...
-                  </Typography>
-                </Box>
-              )}
             </Box>
           </Paper>
         </Grid>
@@ -523,9 +532,6 @@ const WebRTCClient = () => {
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Local Stream: {localStream ? "Active" : "Inactive"}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Remote Stream: {remoteStream ? "Active" : "Inactive"}
           </Typography>
         </CardContent>
       </Card>

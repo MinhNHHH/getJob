@@ -251,6 +251,10 @@ func (rc *Recorder) newClient(id string) (*Client, error) {
 						log.Printf("Error unmarshaling %s", err)
 						return
 					}
+					switch webrtcMessage.Type {
+					case "message":
+						return
+					}
 					dc.Send([]byte(`{"type": "message", "data": "Hello from the server"}`))
 				})
 				rc.clients[id].RecordChannel = dc

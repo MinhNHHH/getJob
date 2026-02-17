@@ -65,9 +65,9 @@ func (ws *WebSocket) Stop() {
 	if ws.active {
 		ws.active = false
 		log.Printf("Closing client")
-		ws.WriteControl(websocket.CloseMessage, []byte{}, time.Time{})
 		close(ws.In)
 		close(ws.Out)
+		ws.WriteControl(websocket.CloseMessage, []byte{}, time.Time{})
 		ws.Close()
 	}
 }

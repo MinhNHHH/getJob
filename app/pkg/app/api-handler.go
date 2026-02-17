@@ -9,6 +9,7 @@ import (
 
 	"github.com/MinhNHHH/get-job/pkg/database/data"
 	"github.com/MinhNHHH/get-job/pkg/llm"
+	"github.com/MinhNHHH/get-job/pkg/recorder"
 )
 
 type GenerateCoverLetterRequest struct {
@@ -188,4 +189,18 @@ func (app *Application) GetAllJobs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error encoding response", http.StatusInternalServerError)
 		return
 	}
+}
+
+func (app *Application) CreateRoom(w http.ResponseWriter, r *http.Request) {
+	newRTC := recorder.New()
+	app.WebRtc = newRTC
+
+	rtcUrl, err := app.WebRtc.Start("http://localhost:3001")
+	if err != nil {
+		log.Println("Failed to start room:", err)
+		http.Error(w, "Failed to start room", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(rtcUrl)
 }

@@ -24,9 +24,14 @@ type Client struct {
 
 type Recorder struct {
 	wsConn *WebSocket
-	lock   *sync.Mutex
+	lock   sync.Mutex
 
 	clients map[string]*Client
+}
+
+type MessageChannel struct {
+	Type string `json:"type"`
+	Data string `json:"data"`
 }
 
 func New() *Recorder {
@@ -40,7 +45,6 @@ func (rc *Recorder) Start(server string) (string, error) {
 	log.Printf("New session: %s", sessionId)
 
 	wsURL := GetWSURL(server, sessionId)
-	fmt.Println(wsURL)
 	wsConn, err := NewWebSocketConnection(wsURL)
 	if err != nil {
 		log.Printf("Failed to connect to signaling server: %s", err)
@@ -70,7 +74,7 @@ func (rc *Recorder) Start(server string) (string, error) {
 		rc.Stop("WebSocket connection to server is closed")
 		return nil
 	})
-
+	go rc.startHandleWsMessage()
 	return wsURL, nil
 }
 
@@ -83,7 +87,7 @@ func (rc *Recorder) Stop(msg string) {
 func (rc *Recorder) writeWebsocket(msg message.Wrapper) error {
 	msg.From = cfg.RECORDER_WEBSOCKET_HOST_ID
 	if rc.wsConn == nil {
-		return fmt.Errorf("Websocket not connected")
+		return fmt.Errorf("websocket not connected")
 	}
 	rc.wsConn.Out <- msg
 	return nil
@@ -91,15 +95,14 @@ func (rc *Recorder) writeWebsocket(msg message.Wrapper) error {
 
 func (rc *Recorder) startHandleWsMessage() error {
 	if rc.wsConn == nil {
-		log.Printf("Websocket connection is not connected")
-		return fmt.Errorf("Websocket connection is not connected")
+		return fmt.Errorf("websocket connection is not connected")
 	}
 
 	for {
 		msg, ok := <-rc.wsConn.In
 		if !ok {
 			log.Printf("Failed to read websocket message")
-			return fmt.Errorf("Failed to read websocket message")
+			return fmt.Errorf("failed to read websocket message")
 		}
 
 		// skip message that are not send to the host
@@ -109,35 +112,36 @@ func (rc *Recorder) startHandleWsMessage() error {
 		}
 		err := rc.HandleWebSocketMessage(msg)
 		if err != nil {
-			log.Printf("Failed to handle message: %v, with error: %s", msg, err)
+			fmt.Printf("failed to handle message: %v, with error: %s", msg, err)
 			continue
 		}
 	}
 }
 
 func (rc *Recorder) HandleWebSocketMessage(msg message.Wrapper) error {
+	var client *Client
 	if msg.Type == message.TCConnect {
-		clientVersion := msg.Data.(string)
-		if clientVersion != cfg.SUPPORTED_VERSION {
-			rc.writeWebsocket(message.Wrapper{Type: message.TCUnsupportedVersion, Data: cfg.SUPPORTED_VERSION, To: msg.From})
-			return fmt.Errorf("Client is running unsupported version: %s", clientVersion)
+		data := msg.Data.(string)
+		if data != cfg.ACCEPTED_CONNECT {
+			rc.writeWebsocket(message.Wrapper{Type: message.TCUnConnected, Data: cfg.ACCEPTED_CONNECT, To: msg.From})
+			return fmt.Errorf("client is not accpect connect: %s", data)
 		}
-
 		_, err := rc.newClient(msg.From)
 		log.Printf("New client with ID: %s", msg.From)
 		if err != nil {
-			return fmt.Errorf("Failed to create client: %s", err)
+			return fmt.Errorf("failed to create client: %s", err)
 		}
 		msg := message.Wrapper{
 			To: msg.From,
 		}
+		msg.Type = message.TCConnect
 		rc.writeWebsocket(msg)
 		return nil
 	}
 
 	client, ok := rc.clients[msg.From]
 	if !ok {
-		return fmt.Errorf("Client with ID: %s is not found", msg.From)
+		return fmt.Errorf("client with ID: %s is not found", msg.From)
 	}
 
 	switch msgType := msg.Type; msgType {
@@ -149,17 +153,17 @@ func (rc *Recorder) HandleWebSocketMessage(msg message.Wrapper) error {
 		log.Printf("Get an offer: %v", (string(msg.Data.(string))))
 
 		if err := client.conn.SetRemoteDescription(offer); err != nil {
-			return fmt.Errorf("Failed to set remote description: %s", err)
+			return fmt.Errorf("failed to set remote description: %s", err)
 		}
 
 		// send back SDP answer and set it as local description
 		answer, err := client.conn.CreateAnswer(nil)
 		if err != nil {
-			return fmt.Errorf("Failed to create offfer: %s", err)
+			return fmt.Errorf("failed to create offfer: %s", err)
 		}
 
 		if err := client.conn.SetLocalDescription(answer); err != nil {
-			return fmt.Errorf("Failed to set local description: %s", err)
+			return fmt.Errorf("failed to set local description: %s", err)
 		}
 		answerByte, _ := json.Marshal(answer)
 		payload := message.Wrapper{
@@ -171,14 +175,14 @@ func (rc *Recorder) HandleWebSocketMessage(msg message.Wrapper) error {
 	case message.TRTCCandidate:
 		candidate := webrtc.ICECandidateInit{}
 		if err := json.Unmarshal([]byte(msg.Data.(string)), &candidate); err != nil {
-			return fmt.Errorf("Failed to unmarshall icecandidate: %s", err)
+			return fmt.Errorf("failed to unmarshall icecandidate: %s", err)
 		}
 
 		if err := client.conn.AddICECandidate(candidate); err != nil {
-			return fmt.Errorf("Failed to add ice candidate: %s", err)
+			return fmt.Errorf("failed to add ice candidate: %s", err)
 		}
 	default:
-		return fmt.Errorf("Not implemented to handle message type: %s", msg.Type)
+		return fmt.Errorf("not implemented to handle message type: %s", msg.Type)
 	}
 	return nil
 }
@@ -236,14 +240,22 @@ func (rc *Recorder) newClient(id string) (*Client, error) {
 	})
 
 	peerConn.OnDataChannel(func(dc *webrtc.DataChannel) {
-		log.Printf("New DataChannel %s %d\n", dc.Label(), dc.ID())
 		dc.OnOpen(func() {
 			log.Printf("New DataChannel %s %d\n", dc.Label(), dc.ID())
 			switch label := dc.Label(); label {
 			case cfg.RECORDER_WEBRTC_DATA_CHANNEL:
 				dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-					log.Printf("Received message: %s", msg.Data)
-					dc.Send([]byte("aasdhalsdhasljdhlas"))
+					webrtcMessage := MessageChannel{}
+					err := json.Unmarshal([]byte(msg.Data), &webrtcMessage)
+					if err != nil {
+						log.Printf("Error unmarshaling %s", err)
+						return
+					}
+					switch webrtcMessage.Type {
+					case "message":
+						return
+					}
+					dc.Send([]byte(`{"type": "message", "data": "Hello from the server"}`))
 				})
 				rc.clients[id].RecordChannel = dc
 			default:

@@ -6,14 +6,16 @@ import (
 	"github.com/MinhNHHH/get-job/pkg/cfgs"
 	"github.com/MinhNHHH/get-job/pkg/database/repository"
 	"github.com/MinhNHHH/get-job/pkg/llm"
+	"github.com/MinhNHHH/get-job/pkg/recorder"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 )
 
 type Application struct {
-	DB   repository.DatabaseRepo
-	Cfgs cfgs.Configs
-	LLM  llm.LLM
+	DB     repository.DatabaseRepo
+	Cfgs   cfgs.Configs
+	LLM    llm.LLM
+	WebRtc *recorder.Recorder
 }
 
 type NotificationRequest struct {
@@ -67,6 +69,7 @@ func (app *Application) Routes() http.Handler {
 	mux.Route("/api", func(r chi.Router) {
 		r.Post("/generate-cover-letter", app.GenerateCoverLetter)
 		r.Get("/jobs", app.GetAllJobs)
+		r.Get("/interviews", app.CreateRoom)
 	})
 	return mux
 }

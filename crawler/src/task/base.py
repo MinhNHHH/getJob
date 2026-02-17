@@ -33,7 +33,6 @@ def on_task_done(task_id, results):
 		"results": results,
 		"duration": different_time_in_miliseconds(task_info["start_time"], now),
 	})
-	print(task_id)
 	r.set(task_id, json.dumps(task_info))
 
 
